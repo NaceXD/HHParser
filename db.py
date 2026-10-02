@@ -6,7 +6,6 @@ from typing import Generator
 DB_NAME = "hh_vacancies.db"
 
 # Пул на 5 соединений
-
 _pool: Queue[sqlite3.Connection] = Queue(maxsize=5)
 
 
@@ -52,6 +51,7 @@ def init_db():
                 url TEXT,
                 city TEXT,
                 published_at TEXT,
+                search_text TEXT,
                 created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
             )"""
         )
@@ -69,24 +69,47 @@ def init_db():
 
 
 def save_vacancy(vacancy: dict):
+    new_search_text = vacancy.get("search_text", "").strip()
+
     with get_db_connection() as conn:
         cursor = conn.cursor()
+
+        # Используем ON CONFLICT DO UPDATE для склеивания поисковых запросов без дубликатов
         cursor.execute(
-            """INSERT OR REPLACE INTO vacancies (
-                id, title, company, salary_from, salary_to, salary_currency, url, city, published_at)
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+            """INSERT INTO vacancies (
+                id, title, company, salary_from, salary_to, salary_currency, url, city, published_at, search_text)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                ON CONFLICT(id) DO UPDATE SET
+                    title = excluded.title,
+                    company = excluded.company,
+                    salary_from = excluded.salary_from,
+                    salary_to = excluded.salary_to,
+                    salary_currency = excluded.salary_currency,
+                    url = excluded.url,
+                    city = excluded.city,
+                    published_at = excluded.published_at,
+                    search_text = CASE 
+                        WHEN vacancies.search_text LIKE '%' || ? || '%' THEN vacancies.search_text
+                        ELSE vacancies.search_text || ', ' || ?
+                    END
             """, (
                 vacancy["id"],
                 vacancy["title"],
                 vacancy["company"],
                 vacancy["salary_from"],
-                vacancy["salary_to"],
+                vacancy["vacancy_to"] if "vacancy_to" in vacancy else vacancy.get("salary_to"),
                 vacancy["salary_currency"],
                 vacancy["url"],
                 vacancy["city"],
                 vacancy["published_at"],
+                new_search_text,
+                # Параметры для блока ON CONFLICT DO UPDATE:
+                new_search_text,  # Для проверки LIKE
+                new_search_text  # Для склейки, если слова еще нет
             ),
         )
+
+        # Обновляем навыки (удаляем старые и пишем актуальные)
         cursor.execute("""DELETE FROM skills WHERE vacancy_id = ?""", (vacancy["id"],))
         for skill in vacancy.get("skills", []):
             cursor.execute(
