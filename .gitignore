@@ -1,0 +1,31 @@
+# Локальные файлы конфигурации окружения (содержат секреты)
+.env
+.env.local
+
+# Виртуальное окружение Python
+.venv/
+venv/
+ENV/
+env/
+
+# Кэш Python компилятора
+**/__pycache__/
+*.py[cod]
+*$py.class
+
+# База данных SQLite (исключаем локальную БД и её временные файлы WAL)
+*.db
+*.db-wal
+*.db-shm
+
+# Логи приложения
+*.log
+
+# Файлы настроек сред разработки (PyCharm, VS Code)
+.idea/
+.vscode/
+*.suo
+*.ntvs*
+*.njsproj
+*.sln
+*.swp
