@@ -119,12 +119,31 @@ def save_vacancy(vacancy: dict):
         conn.commit()
 
 
-def get_vacancies(limit: int = 100) -> list[dict]:
+def get_vacancies(search: str = None, limit: int = None) -> list[dict]:
     with get_db_connection() as conn:
         cursor = conn.cursor()
-        result = cursor.execute("""SELECT * FROM vacancies ORDER BY created_at DESC LIMIT ?""",
-                                (limit,)).fetchall()
-        return [dict(row) for row in result]
+
+        if search:
+            sql_limit = limit if limit is not None else -1
+            search_param = f"%{search.strip()}%"
+            query = """SELECT * FROM vacancies WHERE search_text LIKE ? ORDER BY created_at DESC LIMIT ?"""
+            rows = cursor.execute(query, (search_param, sql_limit)).fetchall()
+        else:
+            sql_limit = limit if limit is not None else 20
+
+            query = """SELECT * FROM vacancies ORDER BY created_at DESC LIMIT ?"""
+            rows = cursor.execute(query, (sql_limit,)).fetchall()
+
+        vacancies = [dict(row) for row in rows]
+
+        for vacancy in vacancies:
+            skill_rows = cursor.execute(
+                """SELECT skill_name FROM skills WHERE vacancy_id = ?""",
+                (vacancy["id"],)
+            ).fetchall()
+            vacancy["skills"] = [s["skill_name"] for s in skill_rows]
+
+        return vacancies
 
 
 if __name__ == "__main__":
